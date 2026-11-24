@@ -6,9 +6,9 @@ review. It runs as a first-class agent on an OpenClaw Enterprise (OCE) cluster
 instead of inside a CI pipeline, which is the interesting part: the same
 platform that hosts chat agents also hosts the software-development loop.
 
-Built and proven end to end on a private stage cluster in November 2026: a
-test ticket filed in Jira was claimed, fixed, committed with sign-off, pushed,
-and opened as a draft PR, and the ticket got the PR link back in a comment.
+Proven end to end: a test ticket filed in Jira was claimed, fixed, committed
+with sign-off, pushed, and opened as a draft PR, and the ticket got the PR
+link back in a comment.
 
 ## How it works
 
@@ -52,6 +52,8 @@ oversight.
 
 ## Repository layout
 
+- `docs/install.md` — how to deploy this on your own cluster, and how to
+  validate it before turning the schedule on
 - `docs/design.md` — the design document (goals, non-goals, constraints,
   approach trade-offs)
 - `docs/runbook.md` — the exact procedure the agent follows each tick
