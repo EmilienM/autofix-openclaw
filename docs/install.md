@@ -102,6 +102,12 @@ wants job UUIDs, not names).
   `openclaw cron runs <job-id>`.
 - A human can continue a completed tick by opening that run's session in the
   agent UI; the workspace (including the cloned repo) persists.
+- Re-running a ticket needs three resets, because eligibility is guarded in
+  two places besides Jira: remove the `autofix-openclaw-wip` label on the
+  ticket (the JQL excludes it), run `reset-state KEY` to drop the local
+  terminal-outcome record, and delete the remote `autofix/KEY` branch if a
+  previous attempt pushed one (deleting it closes the PR opened from it;
+  the retry's push is not forced). Then run a tick.
 - If the agent is ever recreated, re-do the IAM binding, the SCC grant, the
   harness-override deploy, the network policy, and the workspace staging.
   Revision redeploys lose nothing but the runtime home.

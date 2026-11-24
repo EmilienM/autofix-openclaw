@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# usage: reset-state KEY
+# Removes a ticket's terminal-outcome record from state.json so it becomes
+# eligible for processing again. Atomic (temp file + rename); safe if
+# state.json is missing or empty. Idempotent: prints "removed" or
+# "not-present", exits 0 either way.
+#
+# A full retry also needs, outside this script's reach:
+# - the autofix-openclaw-wip label absent on the Jira ticket (the JQL
+#   excludes it), and
+# - if a previous attempt pushed, the remote branch autofix/KEY deleted
+#   (deleting it closes any PR opened from it; the retry's push is not
+#   forced and would otherwise be rejected non-fast-forward).
+set -euo pipefail
+
+[ $# -eq 1 ] || { echo "usage: reset-state KEY" >&2; exit 2; }
+KEY="$1"
+[[ $KEY =~ ^[A-Z][A-Z0-9]*-[0-9]+$ ]] || { echo "reset-state: bad ticket key: $KEY" >&2; exit 2; }
+
+AUTOFIX_HOME="${AUTOFIX_HOME:-$HOME/.autofix}"
+python3 - "$AUTOFIX_HOME/state.json" "$KEY" <<'EOF'
+import json
+import os
+import sys
+import tempfile
+
+path, key = sys.argv[1:3]
+d = {}
+if os.path.exists(path):
+    try:
+        with open(path) as f:
+            d = json.load(f)
+    except ValueError:
+        d = {}
+removed = d.get("tickets", {}).pop(key, None)
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".state-", suffix=".json")
+try:
+    with os.fdopen(fd, "w") as f:
+        json.dump(d, f, indent=2)
+    os.replace(tmp, path)
+except BaseException:
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+    raise
+print("removed" if removed is not None else "not-present")
+EOF
