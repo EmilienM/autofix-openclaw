@@ -73,3 +73,20 @@ OpenShell. Each one cost a debugging cycle; none were obvious from the docs.
   runs, and the sandbox network logs were enough to verify the agent did
   what the runbook said (the Jira query appeared under the expected fence
   rule, nothing else was touched).
+
+## Subagent sessions (known limitation)
+
+Per-ticket subagent sessions need runtime support that our version does not
+have yet. The gateway tool baseline exposes `sessions_spawn` and friends, but
+on a dedicated worker the tool refuses the model's calls: the system prompt
+describes the full gateway schema while the worker accepts only `task` and
+`label`, and the rejection does not name the offending field. Restating the
+worker schema in the prompt did not help on our runtime; the spawn call ends
+without creating a child session, and the caller can hit a session lifecycle
+race on top. The upstream fix (openclaw/openclaw#203292, "let agents on a
+dedicated worker start child sessions") plus its announced follow-ups need to
+land in the runtime image before the orchestrator/fixer split works.
+
+Until then, one ticket per tick already gives a per-ticket session: each
+tick run is an isolated session a human can open and continue. What is
+missing is the split itself and ticket-key-named sessions.
