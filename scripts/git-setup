@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# usage: git-setup   (run from the cloned repo root, before any commit)
+# Sets the repo-local commit identity and credential helper from
+# .autofix/config.json. Global git config is not persistent in the sandbox,
+# so everything the loop needs lives in the repo config.
+set -euo pipefail
+
+AUTOFIX_HOME="${AUTOFIX_HOME:-$HOME/.autofix}"
+[ -x "$AUTOFIX_HOME/bin/git-credential-gh" ] || {
+    echo "git-setup: missing $AUTOFIX_HOME/bin/git-credential-gh" >&2
+    exit 1
+}
+
+COMMIT_NAME="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit_name"])' \
+    "$AUTOFIX_HOME/config.json")"
+COMMIT_EMAIL="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit_email"])' \
+    "$AUTOFIX_HOME/config.json")"
+
+git config user.name "$COMMIT_NAME"
+git config user.email "$COMMIT_EMAIL"
+git config credential.helper "$AUTOFIX_HOME/bin/git-credential-gh"

@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# usage: push-and-pr KEY BRANCH TITLE   (run from the cloned repo root)
+# Verifies origin is the allowlisted repo (fails closed), pushes the branch,
+# opens a draft PR via the GitHub REST API referencing the ticket key,
+# records the ticket as processed in state.json, and prints the PR URL on
+# stdout (git push output goes to stderr). Push, PR creation and the state
+# record succeed or fail as one unit.
+# curl is the HTTP client (OCSF fence); python3 only builds/parses JSON.
+set -euo pipefail
+
+[ $# -eq 3 ] || { echo "usage: push-and-pr KEY BRANCH TITLE" >&2; exit 2; }
+KEY="$1"
+BRANCH="$2"
+TITLE="$3"
+[[ $KEY =~ ^[A-Z][A-Z0-9]*-[0-9]+$ ]] || { echo "push-and-pr: bad ticket key: $KEY" >&2; exit 2; }
+[[ $BRANCH =~ ^autofix/[A-Za-z0-9._/-]+$ ]] || { echo "push-and-pr: bad branch name: $BRANCH" >&2; exit 2; }
+
+AUTOFIX_HOME="${AUTOFIX_HOME:-$HOME/.autofix}"
+PAT_FILE="$AUTOFIX_HOME/creds/gh-pat"
+[ -r "$PAT_FILE" ] || { echo "push-and-pr: missing $PAT_FILE" >&2; exit 1; }
+PAT="$(cat "$PAT_FILE")"
+
+ALLOWED="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["allowlisted_repo"])' \
+    "$AUTOFIX_HOME/config.json")"
+ORIGIN="$(git remote get-url origin)"
+case "${ORIGIN%.git}" in
+    "$ALLOWED" | "$ALLOWED.git") ;;
+    *)
+        echo "push-and-pr: refusing to push to non-allowlisted repo: $ORIGIN" >&2
+        exit 1
+        ;;
+esac
+
+git push -u origin -- "$BRANCH" >&2
+
+# owner/repo from the allowlisted URL (https://github.com/OWNER/REPO)
+REPO_PATH="${ALLOWED#https://github.com/}"
+BODY="$(python3 -c 'import json,sys
+key, branch, title = sys.argv[1], sys.argv[2], sys.argv[3]
+print(json.dumps({
+    "title": title,
+    "head": branch,
+    "base": "main",
+    "draft": True,
+    "body": "Closes " + key + "\n\nPR opened by the autofix-openclaw PoC agent; a human reviews before merge.\n",
+}))' \
+    "$KEY" "$BRANCH" "$TITLE")"
+
+RESP="$(curl --silent --show-error --fail-with-body \
+    -H "Authorization: Bearer $PAT" \
+    -H 'Accept: application/vnd.github+json' \
+    -X POST "https://api.github.com/repos/$REPO_PATH/pulls" \
+    -d "$BODY")" || { echo "push-and-pr: PR creation request failed" >&2; exit 1; }
+
+PR_URL="$(printf '%s' "$RESP" | python3 -c 'import json,sys; print(json.load(sys.stdin)["html_url"])')"
+
+"$AUTOFIX_HOME/bin/mark-state" "$KEY" processed
+
+printf '%s\n' "$PR_URL"

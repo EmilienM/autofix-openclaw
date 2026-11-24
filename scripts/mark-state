@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# usage: mark-state KEY STATUS [REASON]
+# STATUS: processed | skipped | failed | stuck
+# Records a ticket's terminal outcome in state.json so it leaves the search
+# queue. Atomic (temp file + rename); safe if state.json is missing or empty.
+set -euo pipefail
+
+[ $# -ge 2 ] || { echo "usage: mark-state KEY STATUS [REASON]" >&2; exit 2; }
+KEY="$1"
+STATUS="$2"
+REASON="${3:-}"
+case "$STATUS" in
+    processed | skipped | failed | stuck) ;;
+    *) echo "mark-state: STATUS must be processed|skipped|failed|stuck" >&2; exit 2 ;;
+esac
+
+AUTOFIX_HOME="${AUTOFIX_HOME:-$HOME/.autofix}"
+python3 - "$AUTOFIX_HOME/state.json" "$KEY" "$STATUS" "$REASON" <<'EOF'
+import json
+import os
+import sys
+import tempfile
+
+path, key, status, reason = sys.argv[1:5]
+d = {}
+if os.path.exists(path):
+    try:
+        with open(path) as f:
+            d = json.load(f)
+    except ValueError:
+        d = {}
+entry = {"status": status}
+if reason:
+    entry["reason"] = reason
+d.setdefault("tickets", {})[key] = entry
+dirname = os.path.dirname(path)
+fd, tmp = tempfile.mkstemp(dir=dirname, prefix=".state-", suffix=".json")
+try:
+    with os.fdopen(fd, "w") as f:
+        json.dump(d, f, indent=2)
+    os.replace(tmp, path)
+except BaseException:
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+    raise
+EOF

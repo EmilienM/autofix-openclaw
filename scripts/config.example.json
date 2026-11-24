@@ -1,0 +1,7 @@
+{
+  "jql": "project = YOURPROJECT AND component = \"Your Component\" AND labels = \"autofix-openclaw\" AND labels != \"autofix-openclaw-wip\" AND statusCategory != Done ORDER BY created ASC",
+  "allowlisted_repo": "https://github.com/YOUR-ORG/YOUR-REPO",
+  "commit_name": "Your Bot Name (autofix-openclaw)",
+  "commit_email": "bot@example.com",
+  "gh_user": "your-github-user"
+}

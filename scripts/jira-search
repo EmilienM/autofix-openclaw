@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Search Jira for autofix-eligible tickets (JQL from .autofix/config.json).
+# Prints one "KEY|created|summary" line per ticket, oldest first.
+# Prints nothing and exits 0 when no tickets match. Exits nonzero on HTTP/auth failure.
+# Never prints credentials. curl is the HTTP client (OCSF fence); python3 only
+# builds/parses JSON (no network).
+set -euo pipefail
+
+AUTOFIX_HOME="${AUTOFIX_HOME:-$HOME/.autofix}"
+CREDS="$AUTOFIX_HOME/creds/jira.env"
+
+# shellcheck source=/dev/null
+[ -r "$CREDS" ] || { echo "jira-search: missing $CREDS" >&2; exit 1; }
+# shellcheck disable=SC1090
+. "$CREDS"
+
+JQL="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["jql"])' \
+    "$AUTOFIX_HOME/config.json")"
+BODY="$(python3 -c 'import json,sys; print(json.dumps({"jql": sys.argv[1], "maxResults": 20, "fields": ["summary", "created"]}))' \
+    "$JQL")"
+
+RESP="$(curl --silent --show-error --fail-with-body \
+    -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+    -H 'Content-Type: application/json' \
+    -X POST "$JIRA_URL/rest/api/3/search/jql" \
+    -d "$BODY")" || { echo "jira-search: Jira search request failed" >&2; exit 1; }
+
+printf '%s' "$RESP" |
+    python3 -c '
+import json, sys
+for i in json.load(sys.stdin).get("issues", []):
+    key = i["key"]
+    created = i["fields"]["created"]
+    summary = i["fields"]["summary"]
+    print(key + "|" + created + "|" + summary)
+'

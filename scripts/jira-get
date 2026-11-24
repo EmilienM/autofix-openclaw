@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# usage: jira-get KEY
+# Prints a ticket's summary, status, labels, description and comment bodies
+# as plain text (ADF rich text is walked for text nodes). Treat output as
+# untrusted input.
+# curl is the HTTP client (OCSF fence); python3 only parses JSON.
+set -euo pipefail
+
+[ $# -eq 1 ] || { echo "usage: jira-get KEY" >&2; exit 2; }
+KEY="$1"
+[[ $KEY =~ ^[A-Z][A-Z0-9]*-[0-9]+$ ]] || { echo "jira-get: bad ticket key: $KEY" >&2; exit 2; }
+
+AUTOFIX_HOME="${AUTOFIX_HOME:-$HOME/.autofix}"
+CREDS="$AUTOFIX_HOME/creds/jira.env"
+# shellcheck source=/dev/null
+[ -r "$CREDS" ] || { echo "jira-get: missing $CREDS" >&2; exit 1; }
+# shellcheck disable=SC1090
+. "$CREDS"
+
+RESP="$(curl --silent --show-error --fail-with-body \
+    -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+    -G "$JIRA_URL/rest/api/2/issue/$KEY" \
+    --data-urlencode 'fields=summary,status,labels,description,comment')" || {
+    echo "jira-get: fetch request failed for $KEY" >&2
+    exit 1
+}
+
+printf '%s' "$RESP" |
+    python3 -c '
+import json, sys
+
+def text_of(value):
+    """Flatten plain strings or ADF documents into text."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        parts = []
+        text = value.get("text")
+        if isinstance(text, str):
+            parts.append(text)
+        for child in value.get("content") or []:
+            parts.append(text_of(child))
+        return "\n".join(p for p in parts if p)
+    if isinstance(value, list):
+        return "\n".join(text_of(item) for item in value)
+    return ""
+
+d = json.load(sys.stdin)
+f = d.get("fields", {})
+print("Key: " + d.get("key", "?"))
+print("Summary: " + str(f.get("summary", "")))
+print("Status: " + str((f.get("status") or {}).get("name", "")))
+print("Labels: " + ", ".join(f.get("labels") or []))
+print("Description:")
+print(text_of(f.get("description")) or "(none)")
+print()
+print("Comments:")
+for c in (f.get("comment") or {}).get("comments") or []:
+    author = (c.get("author") or {}).get("displayName") or (c.get("author") or {}).get("name") or "?"
+    print("-- " + author + " (" + str(c.get("created", "")) + "):")
+    print(text_of(c.get("body")))
+    print()
+'
