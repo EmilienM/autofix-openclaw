@@ -41,6 +41,12 @@ policy. Agent policy edits may need enabling first
 revision (`occ agent policy apply <agent> --revision <rev> --expected-version
 N`). Verify from inside a turn that each endpoint answers.
 
+If your orchestrator spawns subagents, also size the node's worker
+capacity: `runtime.nativeOpenClawSessionCapacity` in the Installation
+(default 8) must cover the orchestrator's own turn plus every concurrent
+fixer, or capacity-refused spawns will fail tickets. A sandbox picks up a
+changed value only after a redeploy.
+
 ## 3. Stage the workspace
 
 The persistent workspace in the sandbox (commonly `/sandbox/enterprise`; it

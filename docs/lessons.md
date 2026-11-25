@@ -101,3 +101,22 @@ Three behaviors to know once spawning works:
   separate field. Watching for the label in the session list (or the
   terminal status on the child) is the reliable check — grepping keys for
   the label finds nothing and makes working spawns look like failures.
+
+## Worker capacity (the parallel-subagent limit)
+
+Spawned subagents are not free: each one is a worker environment on the
+agent's sandbox node, and the node refuses further sessions at its capacity.
+The limit is `runtime.nativeOpenClawSessionCapacity` in the Installation
+(default 8; our stage had been set to 2, so an orchestrator plus one fixer
+exhausted it). Three things made this confusing to diagnose:
+
+- The orchestrating agent's own turn also occupies a slot, so usable
+  concurrency is capacity minus one.
+- Idle workers are not retired automatically upstream, so completed
+  sessions can hold slots for a while.
+- A capacity-refused spawn does not queue; the parent's turn can die with a
+  node-disconnect instead of failing that one ticket cleanly.
+
+Changing the value is an Installation change, and a sandbox only picks it up
+after a redeploy. Size it to peak subagent concurrency plus one, and keep a
+retry-on-capacity-error rule in the orchestrator runbook as a safety net.
