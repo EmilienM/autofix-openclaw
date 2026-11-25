@@ -14,17 +14,25 @@ link back in a comment.
 
 ```
 every 2h (in-agent /automations job)
-  └─ tick runbook (one turn in an isolated session)
+  └─ orchestrator runbook (one turn in an isolated session)
        1. jira-search        → tickets labeled "autofix-openclaw", oldest first
        2. claim              → add "autofix-openclaw-wip" label (double-pickup guard)
        3. jira-get           → read the ticket (treated as untrusted input)
        4. allowlist check    → only the one approved repo, fail closed
-       5. clone + branch     → autofix/<TICKET>, clean worktree, repo-local git config
-       6. implement + test   → the LLM writes the fix, runs cheap tests if present
-       7. commit             → signed off (DCO), subject prefixed with the ticket key
-       8. push-and-pr        → push + draft PR + state record as one unit
-       9. report             → comment on the ticket with the PR URL
+       5. sessions_spawn     → fixer subagent session labeled "autofix:<TICKET>"
+          └─ fixer runbook (its own session, continuable by a human)
+               a. jira-get   → read the full ticket
+               b. clone + branch → autofix/<TICKET>, clean worktree, repo-local git config
+               c. implement + test → the LLM writes the fix, runs cheap tests if present
+               d. commit     → signed off (DCO), subject prefixed with the ticket key
+               e. push-and-pr → push + draft PR + state record as one unit
+       6. report             → comment on the ticket with the PR URL
 ```
+
+The fixer session is the per-ticket workspace a human interacts with: it
+appears in the agent UI's session list under its `autofix:<TICKET>` label,
+holds the full transcript of the fix, and can be opened and continued after
+the tick completes.
 
 ## Design principles
 
@@ -56,7 +64,9 @@ oversight.
   validate it before turning the schedule on
 - `docs/design.md` — the design document (goals, non-goals, constraints,
   approach trade-offs)
-- `docs/runbook.md` — the exact procedure the agent follows each tick
+- `docs/runbook.md` — the exact procedure the orchestrator follows each tick
+- `docs/fixer.md` — the procedure the spawned fixer subagent follows for one
+  ticket
 - `docs/lessons.md` — what building this taught us about running agents on
   OCE/OpenClaw (the gotchas are the valuable part)
 - `scripts/` — the helper scripts the agent calls, plus `config.example.json`
@@ -74,10 +84,12 @@ per-binary network fences hold.
 
 ## Status and caveats
 
-The write path is proven (one real ticket to one real draft PR). Known gaps
-before anything like production: the repo's test suite runs in the same
-sandbox as the credential files (the PAT scope, not the fences, is what
-actually bounds the blast radius), the automation is managed through the
-gateway CLI because the agent-side automations tool has a schema drift bug in
-this runtime, PRs are authored by a personal account rather than a bot
-identity, and there is no iterate-on-review-feedback loop yet.
+The write path is proven (one real ticket to one real draft PR), and the
+orchestrator/fixer split works on runtimes that include the upstream fix for
+dedicated-worker child sessions. Known gaps before anything like production:
+the repo's test suite runs in the same sandbox as the credential files (the
+PAT scope, not the fences, is what actually bounds the blast radius), the
+automation is managed through the gateway CLI because the agent-side
+automations tool has a schema drift bug in this runtime, PRs are authored by
+a personal account rather than a bot identity, and there is no
+iterate-on-review-feedback loop yet.

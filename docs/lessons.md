@@ -74,19 +74,30 @@ OpenShell. Each one cost a debugging cycle; none were obvious from the docs.
   what the runbook said (the Jira query appeared under the expected fence
   rule, nothing else was touched).
 
-## Subagent sessions (known limitation)
+## Subagent sessions
 
-Per-ticket subagent sessions need runtime support that our version does not
-have yet. The gateway tool baseline exposes `sessions_spawn` and friends, but
-on a dedicated worker the tool refuses the model's calls: the system prompt
-describes the full gateway schema while the worker accepts only `task` and
-`label`, and the rejection does not name the offending field. Restating the
-worker schema in the prompt did not help on our runtime; the spawn call ends
-without creating a child session, and the caller can hit a session lifecycle
-race on top. The upstream fix (openclaw/openclaw#203292, "let agents on a
-dedicated worker start child sessions") plus its announced follow-ups need to
-land in the runtime image before the orchestrator/fixer split works.
+Per-ticket fixer sessions need runtime support for dedicated workers to
+start child sessions; earlier runtime builds refused the model's
+`sessions_spawn` calls (the system prompt described the full gateway schema
+while the worker accepts only `task` and `label`, and the rejection did not
+name the offending field). The upstream fix (openclaw/openclaw#203292) makes
+plain spawns work. Spawned children run on the same worker: they get the
+sandbox, its exec tool, and the network fences, so a fixer subagent can run
+the same helper scripts as the orchestrator.
 
-Until then, one ticket per tick already gives a per-ticket session: each
-tick run is an isolated session a human can open and continue. What is
-missing is the split itself and ticket-key-named sessions.
+Three behaviors to know once spawning works:
+
+- **Session labels are unique.** Spawning with a label that an earlier
+  attempt's session still holds fails with "label already in use". The
+  orchestrator runbook retries with a numeric suffix (`-2`, `-3`, ...), which
+  keeps each attempt in its own continuable session instead of failing the
+  ticket.
+- **Children can stall on worker capacity.** A spawned child may sit queued
+  until a worker slot frees up; the parent sees a slow or
+  unknown-outcome spawn that later completes. Do not read an early
+  non-response as a failure.
+- **Detect results by label, not session key.** Spawned children get
+  generated `dashboard:cloud-*` session keys; the label you passed is a
+  separate field. Watching for the label in the session list (or the
+  terminal status on the child) is the reliable check — grepping keys for
+  the label finds nothing and makes working spawns look like failures.

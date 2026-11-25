@@ -58,7 +58,8 @@ survives redeploys, unlike the runtime home) holds everything:
                   on the target repo>        (chmod 600, no trailing newline)
   config.json     from scripts/config.example.json, filled in
   state.json      {}
-  skills/autofix-openclaw/SKILL.md   from docs/runbook.md
+  skills/autofix-openclaw/SKILL.md   from docs/runbook.md (orchestrator)
+  skills/autofix-openclaw/FIXER.md   from docs/fixer.md (spawned fixer)
 ```
 
 Write the files into the sandbox with `oc cp` plus a chmod pass, or whatever
