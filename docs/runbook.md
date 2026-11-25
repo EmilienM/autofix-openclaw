@@ -40,10 +40,9 @@ happen in the spawned fixer sessions.
    Drop it from this tick's list.
 
 6. Spawn one fixer subagent per remaining ticket, using your sessions_spawn
-   tool, AT MOST TWO AT A TIME. Each spawned fixer occupies a worker slot on
-   the node, and the node has very few: spawning more than two at once
-   exhausts them and kills your own turn. Work in waves: spawn the first two
-   fixers, wait for both to finish, then spawn the next two, and so on.
+   tool. Each spawned fixer occupies a worker slot on the node alongside
+   your own turn; the node capacity (8) covers the batch (at most four
+   fixers plus you), so spawn them all.
    - label: `autofix:KEY`
    - task: `You are the autofix-openclaw fixer for Jira ticket KEY. Follow the runbook at /sandbox/enterprise/.autofix/skills/autofix-openclaw/FIXER.md exactly, for ticket KEY. Your final reply must state the draft PR URL on a line of its own, or start with FAILED: and the reason.`
    Session labels are unique. If a spawn fails with "label already in use"
