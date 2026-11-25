@@ -16,18 +16,22 @@ link back in a comment.
 every 2h (in-agent /automations job)
   └─ orchestrator runbook (one turn in an isolated session)
        1. jira-search        → tickets labeled "autofix-openclaw", oldest first
-       2. claim              → add "autofix-openclaw-wip" label (double-pickup guard)
-       3. jira-get           → read the ticket (treated as untrusted input)
+       2. claim (up to 4)    → add "autofix-openclaw-wip" label per ticket
+       3. jira-get           → read each ticket (treated as untrusted input)
        4. allowlist check    → only the one approved repo, fail closed
-       5. sessions_spawn     → fixer subagent session labeled "autofix:<TICKET>"
+       5. sessions_spawn     → one fixer session per ticket, labeled "autofix:<TICKET>"
           └─ fixer runbook (its own session, continuable by a human)
                a. jira-get   → read the full ticket
                b. clone + branch → autofix/<TICKET>, clean worktree, repo-local git config
                c. implement + test → the LLM writes the fix, runs cheap tests if present
                d. commit     → signed off (DCO), subject prefixed with the ticket key
                e. push-and-pr → push + draft PR + state record as one unit
-       6. report             → comment on the ticket with the PR URL
+       6. report             → comment on each ticket with its PR URL or failure
 ```
+
+One fixer subagent per ticket: the orchestrator claims a batch (oldest
+first, at most four per tick), spawns a separate fixer session for each, and
+reports per-ticket outcomes. A failed ticket never aborts the others.
 
 The fixer session is the per-ticket workspace a human interacts with: it
 appears in the agent UI's session list under its `autofix:<TICKET>` label,

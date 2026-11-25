@@ -78,7 +78,8 @@ bug), use the gateway CLI from inside the gateway pod:
 node /app/openclaw.mjs cron add --every 2h --session isolated --no-deliver \
   autofix-tick "Run the autofix-openclaw tick now. Follow the runbook at
   /sandbox/enterprise/.autofix/skills/autofix-openclaw/SKILL.md exactly,
-  including its guardrails. Process at most one ticket."
+  including its guardrails. Process the eligible tickets, at most four per
+  tick."
 ```
 
 Keep it disabled until validated (`openclaw cron disable <job-id>`; the CLI
